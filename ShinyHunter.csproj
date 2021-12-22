@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net6.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <UserSecretsId>0eeed14a-2bb5-47de-8d41-21e87b381537</UserSecretsId>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="5.0.0" />
+    <PackageReference Include="Microsoft.Extensions.ML" Version="1.7.0" />
+    <PackageReference Include="Microsoft.ML" Version="1.7.0" />
+    <PackageReference Include="Microsoft.ML.ImageAnalytics" Version="1.7.0" />
+    <PackageReference Include="Microsoft.ML.Vision" Version="1.7.0" />
+    <PackageReference Include="SciSharp.TensorFlow.Redist" Version="2.3.1" />
+    <PackageReference Include="SSH.NET" Version="2020.0.1" />
+  </ItemGroup>
+  <ItemGroup Label="ShinyHunterModel">
+    <None Include="ShinyHunterModel.consumption.cs">
+      <DependentUpon>ShinyHunterModel.mbconfig</DependentUpon>
+    </None>
+    <None Include="ShinyHunterModel.training.cs">
+      <DependentUpon>ShinyHunterModel.mbconfig</DependentUpon>
+    </None>
+    <None Include="ShinyHunterModel.zip">
+      <DependentUpon>ShinyHunterModel.mbconfig</DependentUpon>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <None Update="autoshiny.py">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="ffmpeg.exe">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+</Project>
