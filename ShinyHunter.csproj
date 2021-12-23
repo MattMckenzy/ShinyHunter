@@ -7,6 +7,9 @@
     <UserSecretsId>0eeed14a-2bb5-47de-8d41-21e87b381537</UserSecretsId>
   </PropertyGroup>
   <ItemGroup>
+    <None Remove="ShinySparkles.mbconfig" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="5.0.0" />
     <PackageReference Include="Microsoft.Extensions.ML" Version="1.7.0" />
     <PackageReference Include="Microsoft.ML" Version="1.7.0" />
