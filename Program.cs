@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.Configuration;
 using Renci.SshNet;
 using Renci.SshNet.Common;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text;
 using System.Xml.Serialization;
@@ -36,8 +37,6 @@ namespace ShinyHunter
 
         public static void Main()
         {
-            Console.CancelKeyPress += Console_CancelKeyPress;
-
             using SftpClient sftpClient = new(Configuration["ServerAddress"], Configuration["ServerUsername"], Configuration["ServerPassword"]);
             sftpClient.Connect();
             sftpClient.UploadFile(File.OpenRead(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "autoshiny.py")), $"{Configuration["ServerScriptPath"]}/autoshiny.py", true);
@@ -63,7 +62,10 @@ namespace ShinyHunter
 
                         RunCommand(shellStream, "sudo -i", $"[sudo] password for {Configuration["ServerUsername"]}:", TimeSpan.FromSeconds(10));
                         RunCommand(shellStream, Configuration["ServerPassword"], $"root@{Configuration["ServerHostName"]}:~#", TimeSpan.FromSeconds(10));
+                        RunCommand(shellStream, "ps -ef | grep autoshiny.py | grep -v grep | awk '{print $2}' | xargs -r sudo kill", $"root@{Configuration["ServerHostName"]}:~#", TimeSpan.FromSeconds(10));
                         RunCommand(shellStream, $"cd {Configuration["ServerScriptPath"]}", $"root@{Configuration["ServerHostName"]}:{Configuration["ServerScriptPath"]}#", TimeSpan.FromSeconds(10), new string[] { $"root@{Configuration["ServerHostName"]}:~#" });
+
+                        _ = Task.Run(() => CreateAndFillPool(1));
 
                         int attemptNumber = GetAttemptNumber();
 
@@ -79,36 +81,50 @@ namespace ShinyHunter
                             Console.WriteLine();
                             Console.WriteLine("Capturing live footage.");
                             Directory.CreateDirectory(LiveImagesPath);
-                            RunWindowsCommand($"{AppDomain.CurrentDomain.BaseDirectory}ffmpeg.exe", $"-hide_banner -loglevel error -stats -f dshow -rtbufsize 1024M -t 1.3s -i video=\"{Configuration["FFMPEGVideoCaptureDevice"]}\" -r 30/1 %04d.jpg", LiveImagesPath);
+                            RunWindowsCommand($"{AppDomain.CurrentDomain.BaseDirectory}ffmpeg.exe", $"-hide_banner -loglevel error -stats -f dshow -rtbufsize 1024M -t 1.75s -i video=\"{Configuration["FFMPEGVideoCaptureDevice"]}\" -r 30/1 %04d.jpg", LiveImagesPath);
 
-                            Console.WriteLine("Starting prediction engine.");
-                            List<string> results = new();
+                            Console.WriteLine("Preparing prediction inputs.");
+                            ConcurrentStack<ModelInput> inputs = new();
                             foreach (FileInfo liveImage in new DirectoryInfo(LiveImagesPath).GetFiles("*.jpg"))
                             {
-                                if (liveImage.LastWriteTime < DateTime.Now - TimeSpan.FromMinutes(2))
+                                if (liveImage.LastWriteTime > DateTime.Now - TimeSpan.FromMinutes(5))
                                 {
-                                    throw new CommandException("FFMPEG did not produce updated live images. ShinyHunter will restart.");
+                                    inputs.Push(new()
+                                    {
+                                        ImageSource = liveImage.FullName
+                                    });
                                 }
-
-                                results.Add(Predict(new()
-                                {
-                                    ImageSource = liveImage.FullName
-                                }).Prediction);
-
-                                Console.Write($"\rPredicting image #{results.Count:00}");
                             }
 
+                            if (!inputs.Any())
+                            {
+                                GlobalCancellationTokenSource.Cancel();
+                                throw new TaskCanceledException("FFMPEG has not been producing updated live images. ShinyHunter will exit.");
+                            }
+
+                            Console.Write($"\rPredicting images...");
+                            DateTime dateTime = DateTime.Now;
+
+                            ConcurrentBag<string> results = new();
+                            List<Task> predictionTasks = new();
+                            while (inputs.TryPop(out ModelInput? modelInput))
+                            {
+                                predictionTasks.Add(Task.Run(() => results.Add(Predict(modelInput).Prediction)));
+                            }
+
+                            Task.WaitAll(predictionTasks.ToArray());
+
                             Console.WriteLine();
-                            Console.WriteLine($"Got {results.Count(result => result.Equals("normal"))} normal frames and {results.Count(result => result.Equals("shiny"))} shiny frames.");
+                            Console.WriteLine($"Got {results.Count(result => result.Equals("normal"))} normal frames and {results.Count(result => result.Equals("shiny"))} shiny frames in {DateTime.Now - dateTime}.");
                             Console.WriteLine();
 
                             if (results.Count(result => result.Equals("shiny")) > results.Count(result => result.Equals("normal")))
                             {
                                 Console.WriteLine("Found more shiny frames than normal frames!"); 
                                 Console.WriteLine();
-                                Console.WriteLine("----------------------------");
+                                Console.WriteLine("-----------------------------");
                                 Console.WriteLine($"| Success on attempt #{attemptNumber}! |");
-                                Console.WriteLine("----------------------------");
+                                Console.WriteLine("-----------------------------");
                                 Console.WriteLine();
                                 Console.WriteLine("Shiny Hunter will exit.");                                    
                                 GlobalCancellationTokenSource.Cancel();
@@ -116,7 +132,7 @@ namespace ShinyHunter
                             }
                             else
                             {
-                                Console.WriteLine("Found less shiny frames. ShinyHunter will retry in 5 seconds.");
+                                Console.WriteLine("Found less shiny frames. ShinyHunter will retry in 3 seconds.");
                                 await Task.Delay(5000);
                             }
 
