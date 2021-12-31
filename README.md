@@ -25,3 +25,6 @@ If you've managed to install JoyControl and pair your system to it, you're almos
 This is just a fun project I made to try out things like JoyContol and ML.NET, I hold no responsibility about your use of it or anything that happens in consequence.
 
 With that said, I hope you find this interesting!
+
+
+![ShinySuccess](https://github.com/MattMckenzy/ShinyHunter/blob/main/ShinySuccess.png)
